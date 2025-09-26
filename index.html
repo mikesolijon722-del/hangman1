@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hangman Game</title>
+<style>
+  :root {
+    --bg: #f9f9f9;
+    --text: #222;
+    --accent: #0077cc;
+    --wrong: #cc0000;
+    --correct: #009933;
+  }
+  body {
+    font-family: Arial, sans-serif;
+    background: var(--bg);
+    margin: 0; padding: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+    min-height: 100vh;
+  }
+  header {
+    background: var(--accent);
+    color: #fff; width: 100%;
+    padding: 1rem; text-align: center;
+  }
+  main {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+    padding: 1rem;
+    max-width: 600px;
+  }
+  #gallows { margin: 1rem; height: 200px; }
+  #word { font-size: 2rem; letter-spacing: .5rem; margin: 1rem; }
+  #letters { display: grid; grid-template-columns: repeat(13, 1fr); gap: .25rem; margin: 1rem; }
+  #letters button {
+    padding: .5rem; font-size: 1rem; cursor: pointer;
+    border: 1px solid #ccc; border-radius: 4px;
+  }
+  #letters button:disabled { background: #eee; cursor: not-allowed; }
+  #status { margin: 1rem; }
+  .wrong { color: var(--wrong); }
+  .correct { color: var(--correct); }
+  #hintBox { margin: .5rem; font-style: italic; color: #444; }
+  #controls button {
+    margin: .25rem; padding: .5rem 1rem;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 4px; cursor: pointer;
+  }
+  #controls button:hover { opacity: 0.9; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Hangman (Hard Mode)</h1>
+  <p>Guess the word before the man is hanged!</p>
+</header>
+<main>
+  <svg id="gallows" viewBox="0 0 200 200">
+    <line x1="10" y1="190" x2="150" y2="190" stroke="black" stroke-width="4"/>
+    <line x1="40" y1="190" x2="40" y2="20" stroke="black" stroke-width="4"/>
+    <line x1="40" y1="20" x2="120" y2="20" stroke="black" stroke-width="4"/>
+    <line x1="120" y1="20" x2="120" y2="40" stroke="black" stroke-width="4"/>
+    <!-- Hangman parts -->
+    <circle id="head" cx="120" cy="55" r="15" stroke="black" stroke-width="3" fill="none" style="display:none"/>
+    <line id="body" x1="120" y1="70" x2="120" y2="120" stroke="black" stroke-width="3" style="display:none"/>
+    <line id="larm" x1="120" y1="80" x2="100" y2="100" stroke="black" stroke-width="3" style="display:none"/>
+    <line id="rarm" x1="120" y1="80" x2="140" y2="100" stroke="black" stroke-width="3" style="display:none"/>
+    <line id="lleg" x1="120" y1="120" x2="100" y2="150" stroke="black" stroke-width="3" style="display:none"/>
+    <line id="rleg" x1="120" y1="120" x2="140" y2="150" stroke="black" stroke-width="3" style="display:none"/>
+  </svg>
+
+  <div id="hintBox"></div>
+  <div id="word"></div>
+  <div id="letters"></div>
+  <div id="status"></div>
+  <div id="controls">
+    <button id="newGame">New Game</button>
+    <button id="hintBtn">Reveal Letter</button>
+  </div>
+</main>
+
+<script>
+(() => {
+  const wordBank = [
+   {word:"jupiter", hint:"It’s the largest planet in our solar system"},
+  {word:"cheetah", hint:"The fastest land animal"},
+{word:"kyla", hint:"Prettiest woman in the world"},
+  {word:"tokyo", hint:"The capital city of Japan"},
+  {word:"photosynthesis", hint:"The process plants use to make food"},
+  {word:"kyla", hint:"Prettiest woman in the world"},
+  {word:"thor", hint:"A superhero who uses a hammer"},
+  {word:"hogwarts", hint:"A wizarding school in Harry Potter"},
+  {word:"olaf", hint:"Animated film about a talking snowman"},
+ 
+  
+  {word:"kyla", hint:"Prettiest woman in the world"},
+  
+
+
+
+  {word:"clock", hint:"It has hands but can’t clap"},
+ 
+
+   
+  ];
+
+  const parts = ["head","body","larm","rarm","lleg","rleg"];
+  let chosen, displayWord, wrong, guessed, hintUsed;
+
+  const elWord = document.getElementById("word");
+  const elLetters = document.getElementById("letters");
+  const elStatus = document.getElementById("status");
+  const elHint = document.getElementById("hintBox");
+  const elHintBtn = document.getElementById("hintBtn");
+
+  function newGame() {
+    // pick random hard word
+    chosen = wordBank[Math.floor(Math.random()*wordBank.length)];
+    displayWord = Array(chosen.word.length).fill("_");
+    wrong = 0;
+    guessed = new Set();
+    hintUsed = false;
+    elHint.textContent = "Hint: " + chosen.hint;
+    elHintBtn.disabled = false;
+    updateWord();
+    updateStatus();
+    renderLetters();
+    resetMan();
+  }
+
+  function updateWord() {
+    elWord.textContent = displayWord.join(" ");
+  }
+
+  function updateStatus(msg="") {
+    elStatus.innerHTML = `Wrong: <span class="wrong">${wrong}</span> / ${parts.length}`;
+    if (msg) elStatus.innerHTML += "<br>" + msg;
+  }
+
+  function renderLetters() {
+    elLetters.innerHTML = "";
+    for (let c=65; c<=90; c++) {
+      const ch = String.fromCharCode(c);
+      const btn = document.createElement("button");
+      btn.textContent = ch;
+      btn.disabled = guessed.has(ch.toLowerCase());
+      btn.addEventListener("click", ()=>guess(ch));
+      elLetters.appendChild(btn);
+    }
+  }
+
+  function guess(ch) {
+    ch = ch.toLowerCase();
+    if (guessed.has(ch)) return;
+    guessed.add(ch);
+    let correct = false;
+    for (let i=0;i<chosen.word.length;i++) {
+      if (chosen.word[i]===ch) {
+        displayWord[i]=ch;
+        correct=true;
+      }
+    }
+    if (!correct) {
+      wrong++;
+      showPart(wrong);
+    }
+    updateWord();
+    renderLetters();
+    checkGame();
+  }
+
+  function showPart(n) {
+    if (n<=parts.length) {
+      document.getElementById(parts[n-1]).style.display="block";
+    }
+  }
+
+  function resetMan() {
+    parts.forEach(id=>document.getElementById(id).style.display="none");
+  }
+
+  function checkGame() {
+    if (!displayWord.includes("_")) {
+      updateStatus("🎉 You win!");
+      disableAll();
+    } else if (wrong>=parts.length) {
+      updateStatus("☠️ You lose! Word was: " + chosen.word);
+      disableAll();
+    }
+  }
+
+  function disableAll() {
+    document.querySelectorAll("#letters button").forEach(b=>b.disabled=true);
+    elHintBtn.disabled = true;
+  }
+
+  function revealLetter() {
+    if (hintUsed) return;
+    let hiddenIndexes = [];
+    for (let i=0;i<displayWord.length;i++) {
+      if (displayWord[i]==="_") hiddenIndexes.push(i);
+    }
+    if (hiddenIndexes.length===0) return;
+    const i = hiddenIndexes[Math.floor(Math.random()*hiddenIndexes.length)];
+    const letter = chosen.word[i];
+    displayWord[i]=letter;
+    guessed.add(letter);
+    hintUsed=true;
+    elHintBtn.disabled=true;
+    updateWord();
+    renderLetters();
+    checkGame();
+  }
+
+  document.getElementById("newGame").addEventListener("click", newGame);
+  elHintBtn.addEventListener("click", revealLetter);
+  document.addEventListener("keydown", e=>{
+    if (e.key.match(/^[a-zA-Z]$/)) guess(e.key);
+  });
+
+  newGame();
+})();
+</script>
+</body>
+</html>
